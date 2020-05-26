@@ -114,4 +114,8 @@ func main() {
 	} else {
 		fmt.Println("cannot parse")
 	}
+
+	m := LibSearch("rickmorty")
+	fmt.Println(m)
+	fmt.Println(Paths[m])
 }

@@ -7,7 +7,8 @@ import (
 )
 
 var (
-	shows = []string{}
+	Shows = []string{}
+	Paths = map[string]string{}
 
 	MediaPaths = []string{
 		"/media/green/tv",
@@ -16,16 +17,6 @@ var (
 		"/media/pink/Anime",
 	}
 )
-
-type FuzzyLib []string
-
-func (f FuzzyLib) String(i int) string {
-	return path.Base(f[i])
-}
-
-func (f FuzzyLib) Len() int {
-	return len(f)
-}
 
 func init() {
 	for _, lib := range MediaPaths {
@@ -37,14 +28,17 @@ func init() {
 
 		for _, file := range files {
 			if file.IsDir() {
-				shows = append(shows, path.Join(lib, file.Name()))
+				fn := file.Name()
+				Shows = append(Shows, fn)
+				Paths[fn] = path.Join(lib, fn)
+
 			}
 		}
 	}
 }
 
 func LibSearch(show string) string {
-	matches := fuzzy.FindFrom(show, FuzzyLib(shows))
+	matches := fuzzy.Find(show, Shows)
 	for _, match := range matches {
 		return match.Str
 	}
