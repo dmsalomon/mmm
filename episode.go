@@ -3,10 +3,10 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log"
 	"path"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 var (
@@ -25,9 +25,10 @@ var (
 	YearRegex    = regexp.MustCompile(`\d{4}`)
 	SampleRegex  = regexp.MustCompile(`(?i)SAMPLE`)
 
-	SampleErr = errors.New("File is a sample")
-	MatchErr  = errors.New("Filename does not follow recognized pattern")
-	ExtErr    = errors.New("Invalid extension")
+	SampleErr       = errors.New("File is a sample")
+	MatchErr        = errors.New("Filename does not follow recognized pattern")
+	ExtErr          = errors.New("Invalid extension")
+	FileNotFoundErr = errors.New("File not found")
 )
 
 type Episode struct {
@@ -38,6 +39,7 @@ type Episode struct {
 	dest    string
 	season  uint
 	episode uint
+	tier    uint
 }
 
 func (e *Episode) String() string {
@@ -46,6 +48,10 @@ func (e *Episode) String() string {
 
 func NewEpisode(_path string) (*Episode, error) {
 	var match []int
+
+	if !fexists(_path) {
+		return nil, FileNotFoundErr
+	}
 
 	file := path.Base(_path)
 
@@ -82,8 +88,15 @@ func NewEpisode(_path string) (*Episode, error) {
 	}
 
 	ext := file[match[8]:match[9]]
-	if !contains(AllExt, ext) {
+	if !contains(VidExt, ext) {
 		return nil, ExtErr
+	}
+
+	tier := uint(0)
+	for release, _ := range ReleaseTier {
+		if strings.Contains(file, release) {
+			tier = ReleaseTier[release]
+		}
 	}
 
 	e := &Episode{
@@ -92,30 +105,8 @@ func NewEpisode(_path string) (*Episode, error) {
 		show:    show,
 		season:  uint(season),
 		episode: uint(episode),
+		tier:    tier,
+		dest:    "",
 	}
 	return e, nil
-}
-
-func main() {
-	path := "/media/trans/Game.of.Thrones.S03e41.720p.mkv"
-	e, err := NewEpisode(path)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println("---------------------------")
-
-	if e != nil {
-		fmt.Println(e.show)
-		fmt.Println(e.season)
-		fmt.Println(e.episode)
-		fmt.Println(e)
-	} else {
-		fmt.Println("cannot parse")
-	}
-
-	m := LibSearch("rickmorty")
-	fmt.Println(m)
-	fmt.Println(Paths[m])
 }
