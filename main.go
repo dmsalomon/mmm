@@ -1,83 +1,36 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"go.uber.org/zap"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"path"
 	"path/filepath"
+	"syscall"
+	"time"
 )
 
 var (
 	logger *zap.SugaredLogger
 
-	SpyDir = "/media/pink/transmission/completed"
+	SpyDir = "/tmp/completed/"
 
-	// flags
-	DryRun bool
+	Replace = false
+)
+
+const (
+	MaxUint = ^uint(0)
 )
 
 func init() {
-	rawlog, err := zap.NewProduction()
+	rawlog, err := zap.NewDevelopment()
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		odie(err)
 	}
 
 	logger = rawlog.Sugar()
-}
-
-func init() {
-	flag.BoolVar(&DryRun, "dry", false, "Dry Run")
-}
-
-func shit() {
-	fmt.Println("---------------------------")
-
-	fmt.Printf("%v = %v\n", "dry", DryRun)
-
-	path := "/tmp/The.Americans.S06E01.AMZN.mkv"
-	e, err := NewEpisode(path)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	if e != nil {
-		fmt.Println(e.show)
-		fmt.Println(e.season)
-		fmt.Println(e.episode)
-		fmt.Println("Release:", e.tier)
-		fmt.Println(e)
-	} else {
-		fmt.Println("cannot parse")
-	}
-
-	fmt.Println("trimmed:", trim(e.show))
-
-	m := libSearch(e.show)
-	fmt.Println(m)
-	fmt.Println(Paths[m])
-
-	_, episodes, err := loadSeason(e.show, e.season)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println("len(episodes):", len(episodes))
-
-	if episodes != nil {
-		for _, ep := range episodes {
-			fmt.Println(ep.path)
-		}
-	}
-
-	err = e.Install()
-	if err != nil {
-		fmt.Println(err)
-	}
 }
 
 func cd(show string) bool {
@@ -97,7 +50,13 @@ func cd(show string) bool {
 }
 
 func installDir(dir string) bool {
-	files, err := ioutil.ReadDir(dir)
+	dirpath, err := filepath.Abs(dir)
+	if err != nil {
+		onoef("%v: %v\n", dir, err)
+		return false
+	}
+
+	files, err := ioutil.ReadDir(dirpath)
 	if err != nil {
 		onoef("%v: %v\n", dir, err)
 		return false
@@ -106,7 +65,7 @@ func installDir(dir string) bool {
 	ok := true
 	for _, fi := range files {
 		var good bool
-		path := path.Join(dir, fi.Name())
+		path := path.Join(dirpath, fi.Name())
 		if fi.IsDir() {
 			good = installDir(path)
 		} else {
@@ -124,6 +83,9 @@ func install(file string) bool {
 	if err != nil {
 		onoef("%v: %v\n", file, err)
 		return false
+	}
+	if Replace {
+		e.tier = MaxUint
 	}
 	err = e.Install()
 	if err != nil {
@@ -164,16 +126,102 @@ func installList(files []string) bool {
 	return ok
 }
 
+func spy(dir string) {
+	reloadLib := make(chan struct{}, 1)
+	for _, path := range MediaPaths {
+		go func() {
+			inotifywait(path, "create,move,delete", false, func(event string) {
+				select {
+				case reloadLib <- struct{}{}:
+				default:
+				}
+			})
+		}()
+	}
+	go func() {
+		for {
+			<-reloadLib
+			logger.Debug("reloading library")
+			loadLib()
+			time.Sleep(1 * time.Second)
+		}
+	}()
+
+	events := make(chan string, 1)
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGHUP)
+
+	go func() {
+		for {
+			<-sigs
+			logger.Info("SIGHUP")
+			events <- "SIGHUP"
+		}
+	}()
+
+	go func() {
+		inotifywait(dir, "create,moved_to", true, func(event string) {
+			events <- event
+		})
+	}()
+
+	select {
+	case events <- "INIT":
+	default:
+	}
+
+	for {
+		logger.Debug(<-events)
+		installDir(dir)
+	}
+}
+
+func Arg(i int) string {
+	if i >= len(os.Args) {
+		return ""
+	} else {
+		return os.Args[i]
+	}
+}
+
+func Args(i, j int) []string {
+	a := os.Args
+	l := len(a)
+	if i >= l || j >= l {
+		return []string{}
+	}
+	if j < 0 {
+		j += (l + 1)
+	}
+	return a[i:j]
+}
+
+func Usage() {
+	out := os.Stderr
+	fmt.Fprintf(out, "Usage: %s [OPTION] [CMD]\n", os.Args[0])
+	fmt.Fprintln(out, "CMD: cd, install, spy")
+}
+
 func main() {
 	defer logger.Sync()
-	flag.Parse()
 
-	switch flag.Arg(0) {
+	ok := true
+
+	switch Arg(1) {
 	case "cd":
-		cd(flag.Arg(1))
+		ok = cd(Arg(2))
+	case "replace":
+		Replace = true
+		fallthrough
 	case "install":
-		installList(flag.Args()[1:])
+		ok = installList(Args(2, -1))
+	case "spy":
+		spy(SpyDir)
 	default:
-		fmt.Println("damn")
+		Usage()
+	}
+
+	if !ok {
+		os.Exit(1)
 	}
 }

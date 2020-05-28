@@ -33,10 +33,6 @@ func fexists(path string) bool {
 }
 
 func moveFile(source, destination string) error {
-	if DryRun {
-		return nil
-	}
-
 	err := os.Rename(source, destination)
 	if err == nil {
 		return nil

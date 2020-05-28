@@ -98,3 +98,8 @@ func onoef(format string, args ...interface{}) {
 func onoe(err interface{}) {
 	onoef("%v\n", err)
 }
+
+func odie(err interface{}) {
+	onoe(err)
+	os.Exit(1)
+}

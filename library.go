@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"github.com/sahilm/fuzzy"
 	"io/ioutil"
+	"os"
 	"path"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 var (
+	libLock      sync.Mutex
 	Shows        []string
 	ShowsTrimmed []string
 	Paths        map[string]string
@@ -71,7 +74,11 @@ func showPath(show string) string {
 }
 
 func loadLib() {
+	libLock.Lock()
+	defer libLock.Unlock()
+
 	Shows = []string{}
+	ShowsTrimmed = []string{}
 	Paths = map[string]string{}
 
 	for _, lib := range MediaPaths {
@@ -92,10 +99,10 @@ func loadLib() {
 	}
 }
 
-func loadSeason2(seasonpath string) []*Episode {
+func loadSeason2(seasonpath string) ([]*Episode, error) {
 	files, err := ioutil.ReadDir(seasonpath)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	episodes := []*Episode{}
@@ -119,7 +126,7 @@ func loadSeason2(seasonpath string) []*Episode {
 		episodes = append(episodes, e)
 	}
 
-	return episodes
+	return episodes, nil
 }
 
 func loadSeason(show string, season uint) (string, []*Episode, error) {
@@ -130,8 +137,14 @@ func loadSeason(show string, season uint) (string, []*Episode, error) {
 
 	seasondir := fmt.Sprintf("Season%d", season)
 	seasonpath := path.Join(showpath, seasondir)
-	seasoninfo := loadSeason2(seasonpath)
+	seasoninfo, err := loadSeason2(seasonpath)
 
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = SeasonNotFoundErr
+		}
+		return seasonpath, nil, err
+	}
 	if seasoninfo == nil {
 		return seasonpath, nil, SeasonNotFoundErr
 	}
@@ -166,26 +179,38 @@ func loadShow(show string) (string, map[uint][]*Episode) {
 			season := strings.TrimPrefix(seasondir, "Season")
 			nseasond, err := strconv.Atoi(season)
 			if err != nil {
+				logger.Error(err)
 				continue
-				/* TODO log this */
 			}
 			nseason = uint(nseasond)
 		}
 
 		seasonpath := path.Join(showpath, seasondir)
-		showinfo[uint(nseason)] = loadSeason2(seasonpath)
+		showinfo[uint(nseason)], err = loadSeason2(seasonpath)
+		if err != nil {
+			logger.Error(err)
+			continue
+		}
 	}
 
 	return showpath, showinfo
 }
 
 func (e *Episode) Install() error {
+	libLock.Lock()
+	defer libLock.Unlock()
+
+begin:
 	var ep *Episode
 	seasonpath, seasoninfo, err := loadSeason(e.show, e.season)
 
 	if err == SeasonNotFoundErr {
-		/* TODO create season dir */
-		return err
+		err = os.Mkdir(seasonpath, os.ModePerm)
+		if err != nil {
+			logger.Info("failed to create directory")
+			return SeasonNotFoundErr
+		}
+		goto begin
 	} else if err != nil {
 		return err
 	}
