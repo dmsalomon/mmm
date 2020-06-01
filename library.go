@@ -24,10 +24,9 @@ var (
 		"/media/black/tv",
 		"/media/pink/tv",
 		"/media/pink/Anime",
-		"/tmp/tv/",
 	}
 
-	CachePath = "/tmp/mmmcache"
+	CachePath = "/media/pink/mmmcache"
 
 	ReleaseTier = map[string]uint{
 		"PROPER": 1,
@@ -205,12 +204,15 @@ begin:
 	seasonpath, seasoninfo, err := loadSeason(e.show, e.season)
 
 	if err == SeasonNotFoundErr {
-		err = os.Mkdir(seasonpath, os.ModePerm)
-		if err != nil {
-			logger.Info("failed to create directory")
-			return SeasonNotFoundErr
+		if e.season > 0 && e.season < 20 {
+			err = os.Mkdir(seasonpath, os.ModePerm)
+			if err != nil {
+				logger.Info("failed to create directory")
+				return SeasonNotFoundErr
+			}
+			goto begin
 		}
-		goto begin
+		return err
 	} else if err != nil {
 		return err
 	}
@@ -231,6 +233,9 @@ begin:
 			if err != nil {
 				return err
 			}
+			logger.Infow("backup",
+				"file", ep.path,
+				"cache", CachePath)
 			cachepath := path.Join(CachePath, ep.file)
 			err := moveFile(ep.path, cachepath)
 			if err != nil {

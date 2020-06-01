@@ -7,6 +7,7 @@ import (
 
 func inotifywait(path string, eventlist string, recursive bool, handler func(string)) {
 	var cmd *exec.Cmd
+	reload := false
 begin:
 	events := make(chan string)
 	if recursive {
@@ -27,7 +28,9 @@ begin:
 	if err := cmd.Start(); err != nil {
 		odie(err)
 	}
-	logger.Info("exec inotifywait")
+	if reload {
+		logger.Info("exec inotifywait")
+	}
 
 	go func() {
 		s := bufio.NewScanner(stdout)
@@ -53,6 +56,7 @@ begin:
 		case e := <-events:
 			handler(e)
 		case <-reset:
+			reload = true
 			goto begin
 		}
 

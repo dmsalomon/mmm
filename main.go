@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"io/ioutil"
 	"os"
 	"os/signal"
@@ -15,7 +16,7 @@ import (
 var (
 	logger *zap.SugaredLogger
 
-	SpyDir = "/tmp/completed/"
+	SpyDir = "/media/pink/transmission/completed"
 
 	Replace = false
 )
@@ -25,7 +26,12 @@ const (
 )
 
 func init() {
-	rawlog, err := zap.NewDevelopment()
+	cfg := zap.NewProductionConfig()
+	if isTerm {
+		cfg := zap.NewDevelopmentConfig()
+		cfg.Level.SetLevel(zapcore.InfoLevel)
+	}
+	rawlog, err := cfg.Build()
 	if err != nil {
 		odie(err)
 	}
@@ -65,7 +71,14 @@ func installDir(dir string) bool {
 	ok := true
 	for _, fi := range files {
 		var good bool
-		path := path.Join(dirpath, fi.Name())
+
+		fn := fi.Name()
+		if len(fn) > 0 && fn[0] == '.' {
+			// skip dotfiles
+			continue
+		}
+
+		path := path.Join(dirpath, fn)
 		if fi.IsDir() {
 			good = installDir(path)
 		} else {
@@ -89,7 +102,7 @@ func install(file string) bool {
 	}
 	err = e.Install()
 	if err != nil {
-		onoef("%v: %v\n", file, err)
+		onoef("%v: %v\n", e, err)
 		return false
 	}
 	return true
@@ -129,21 +142,22 @@ func installList(files []string) bool {
 func spy(dir string) {
 	reloadLib := make(chan struct{}, 1)
 	for _, path := range MediaPaths {
-		go func() {
+		go func(path string) {
 			inotifywait(path, "create,move,delete", false, func(event string) {
 				select {
 				case reloadLib <- struct{}{}:
 				default:
 				}
 			})
-		}()
+		}(path)
 	}
 	go func() {
 		for {
 			<-reloadLib
-			logger.Debug("reloading library")
+			logger.Info("reloading library")
+			to := time.After(1 * time.Second)
 			loadLib()
-			time.Sleep(1 * time.Second)
+			<-to
 		}
 	}()
 
@@ -199,7 +213,7 @@ func Args(i, j int) []string {
 func Usage() {
 	out := os.Stderr
 	fmt.Fprintf(out, "Usage: %s [OPTION] [CMD]\n", os.Args[0])
-	fmt.Fprintln(out, "CMD: cd, install, spy")
+	fmt.Fprintln(out, "CMD: cd, install, replace, spy")
 }
 
 func main() {

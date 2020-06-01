@@ -82,24 +82,44 @@ func ohai(title string, args ...interface{}) {
 }
 
 func opoof(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, "%sWarning:%s ", yellow(), reset())
-	fmt.Fprintf(os.Stderr, format, args...)
+	if isTerm {
+		fmt.Fprintf(os.Stderr, "%sWarning:%s ", yellow(), reset())
+		fmt.Fprintf(os.Stderr, format, args...)
+	} else {
+		logger.Warnf(format, args...)
+	}
 }
 
 func opoo(err interface{}) {
-	opoof("%v\n", err)
+	if isTerm {
+		opoof("%v\n", err)
+	} else {
+		logger.Warn(err)
+	}
 }
 
 func onoef(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, "%sError:%s ", red(), reset())
-	fmt.Fprintf(os.Stderr, format, args...)
+	if isTerm {
+		fmt.Fprintf(os.Stderr, "%sError:%s ", red(), reset())
+		fmt.Fprintf(os.Stderr, format, args...)
+	} else {
+		logger.Errorf(format, args...)
+	}
 }
 
 func onoe(err interface{}) {
-	onoef("%v\n", err)
+	if isTerm {
+		onoef("%v\n", err)
+	} else {
+		logger.Error(err)
+	}
 }
 
 func odie(err interface{}) {
-	onoe(err)
-	os.Exit(1)
+	if isTerm {
+		onoe(err)
+		os.Exit(1)
+	} else {
+		logger.Fatal(err)
+	}
 }
