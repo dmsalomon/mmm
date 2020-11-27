@@ -17,7 +17,7 @@ var (
 	Regexes = []*regexp.Regexp{
 		regexp.MustCompile(`(?i)^(.+?)s(\d\d)[\Wx]*e(\d+).*?\.(\w{3})$`),
 		regexp.MustCompile(`(?i)^(.+?)\.(\d+)x(\d+)\..*?\.(\w{3})$`),
-		regexp.MustCompile(`(?i)^(.+?)\.(\d)(\d\d+)\..*?\.(\w{3})$`),
+		// regexp.MustCompile(`(?i)^(.+?)\.(\d)(\d\d+)\..*?\.(\w{3})$`),
 	}
 
 	JunkEndRegex = regexp.MustCompile(`[\W_\.]+$`)
@@ -46,6 +46,23 @@ func (e *Episode) String() string {
 	return fmt.Sprintf("%s.s%02de%02d", e.show, e.season, e.episode)
 }
 
+func calcTier(file string) uint {
+	tier := uint(0)
+
+	for _, ranking := range Tiers {
+		localTier := uint(0)
+		for pat, rank := range ranking {
+			if strings.Contains(file, pat) {
+				localTier = rank
+			}
+		}
+		tier *= uint(1 + len(ranking))
+		tier += localTier
+	}
+
+	return tier
+}
+
 func NewEpisode(_path string) (*Episode, error) {
 	var match []int
 
@@ -59,19 +76,14 @@ func NewEpisode(_path string) (*Episode, error) {
 		return nil, SampleErr
 	}
 
-	parsed := false
 	for _, re := range Regexes {
 		match = re.FindStringSubmatchIndex(file)
-		if len(match) == 0 {
-			continue
+		if len(match) > 0 {
+			goto parsed
 		}
-
-		parsed = true
-		break
 	}
-	if !parsed {
-		return nil, MatchErr
-	}
+	return nil, MatchErr
+parsed:
 
 	show := file[match[2]:match[3]]
 	show = JunkEndRegex.ReplaceAllLiteralString(show, "")
@@ -92,12 +104,7 @@ func NewEpisode(_path string) (*Episode, error) {
 		return nil, ExtErr
 	}
 
-	tier := uint(0)
-	for release, _ := range ReleaseTier {
-		if strings.Contains(file, release) {
-			tier = ReleaseTier[release]
-		}
-	}
+	tier := calcTier(file)
 
 	e := &Episode{
 		path:    _path,

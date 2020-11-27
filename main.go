@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"sort"
 	"syscall"
 	"time"
 )
@@ -37,6 +38,48 @@ func init() {
 	}
 
 	logger = rawlog.Sugar()
+}
+
+func prune() {
+	libLock.Lock()
+	defer libLock.Unlock()
+
+	toRemove := []*Episode{}
+
+	for _, show := range Shows {
+		_, seasons := loadShow(show)
+
+		for _, episodes := range seasons {
+			sort.Sort(EpisodeList(episodes))
+
+			for i := 0; i < len(episodes); i++ {
+				u := i
+				maxTier := u
+				v := u + 1
+				for ; v < len(episodes); v++ {
+					if episodes[v].episode != episodes[u].episode {
+						break
+					}
+					if episodes[v].tier > episodes[maxTier].tier {
+						maxTier = v
+					}
+				}
+				v--
+
+				if v > u {
+					for j := u; j <= v; j++ {
+						if j != maxTier {
+							toRemove = append(toRemove, episodes[j])
+						}
+					}
+				}
+			}
+		}
+
+	}
+	for _, e := range toRemove {
+		fmt.Printf("%v\n", e)
+	}
 }
 
 func cd(show string) bool {
@@ -213,7 +256,7 @@ func Args(i, j int) []string {
 func Usage() {
 	out := os.Stderr
 	fmt.Fprintf(out, "Usage: %s [OPTION] [CMD]\n", os.Args[0])
-	fmt.Fprintln(out, "CMD: cd, install, replace, spy")
+	fmt.Fprintln(out, "CMD: cd, install, prune, replace, spy")
 }
 
 func main() {
@@ -229,6 +272,8 @@ func main() {
 		fallthrough
 	case "install":
 		ok = installList(Args(2, -1))
+	case "prune":
+		prune()
 	case "spy":
 		spy(SpyDir)
 	default:

@@ -30,8 +30,17 @@ var (
 
 	ReleaseTier = map[string]uint{
 		"PROPER": 1,
+		"Atmos":  1,
 		"AMZN":   2,
 	}
+
+	ResTier = map[string]uint{
+		"720p":  1,
+		"1080p": 2,
+	}
+
+	// ordered from highest priority to lowest
+	Tiers = []map[string]uint{ResTier, ReleaseTier}
 
 	ShowNotFoundErr   = errors.New("show not found")
 	SeasonNotFoundErr = errors.New("season not found")
@@ -39,6 +48,12 @@ var (
 
 	ExtRegex = regexp.MustCompile(`\.\w{3}$`)
 )
+
+type EpisodeList []*Episode
+
+func (e EpisodeList) Len() int           { return len(e) }
+func (e EpisodeList) Swap(i, j int)      { e[i], e[j] = e[j], e[i] }
+func (e EpisodeList) Less(i, j int) bool { return e[i].episode < e[j].episode }
 
 func init() {
 	loadLib()
@@ -233,14 +248,14 @@ begin:
 			if err != nil {
 				return err
 			}
-			logger.Infow("backup",
-				"file", ep.path,
-				"cache", CachePath)
-			cachepath := path.Join(CachePath, ep.file)
-			err := moveFile(ep.path, cachepath)
-			if err != nil {
-				return err
-			}
+			// logger.Infow("backup",
+			// 	"file", ep.path,
+			// 	"cache", CachePath)
+			// cachepath := path.Join(CachePath, ep.file)
+			// err := moveFile(ep.path, cachepath)
+			// if err != nil {
+			// 	return err
+			// }
 		} else {
 			return DupEpisodeErr
 		}
