@@ -44,41 +44,27 @@ func prune() {
 	libLock.Lock()
 	defer libLock.Unlock()
 
-	toRemove := []*Episode{}
-
 	for _, show := range Shows {
 		_, seasons := loadShow(show)
 
 		for _, episodes := range seasons {
 			sort.Sort(EpisodeList(episodes))
 
-			for i := 0; i < len(episodes); i++ {
-				u := i
-				maxTier := u
-				v := u + 1
-				for ; v < len(episodes); v++ {
-					if episodes[v].episode != episodes[u].episode {
-						break
-					}
-					if episodes[v].tier > episodes[maxTier].tier {
-						maxTier = v
-					}
-				}
-				v--
+			i := 0
+			for i < len(episodes) {
+				j := i+1
+				n := episodes[i].episode
 
-				if v > u {
-					for j := u; j <= v; j++ {
-						if j != maxTier {
-							toRemove = append(toRemove, episodes[j])
-						}
-					}
+				for j < len(episodes) && episodes[j].episode == n {
+					j++
 				}
+				for k := i; k < (j-1); k++ {
+					fmt.Printf("%v\n", episodes[k].path)
+				}
+				i = j
 			}
 		}
 
-	}
-	for _, e := range toRemove {
-		fmt.Printf("%v\n", e)
 	}
 }
 

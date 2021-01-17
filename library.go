@@ -53,7 +53,12 @@ type EpisodeList []*Episode
 
 func (e EpisodeList) Len() int           { return len(e) }
 func (e EpisodeList) Swap(i, j int)      { e[i], e[j] = e[j], e[i] }
-func (e EpisodeList) Less(i, j int) bool { return e[i].episode < e[j].episode }
+func (e EpisodeList) Less(i, j int) bool {
+	if e[i].episode != e[j].episode {
+		return e[i].episode < e[j].episode
+	}
+	return e[i].tier < e[j].tier
+}
 
 func init() {
 	loadLib()
@@ -193,7 +198,7 @@ func loadShow(show string) (string, map[uint][]*Episode) {
 			season := strings.TrimPrefix(seasondir, "Season")
 			nseasond, err := strconv.Atoi(season)
 			if err != nil {
-				logger.Error(err)
+				logger.Error(err, ",showpath:", showpath, ",dir:", seasondir)
 				continue
 			}
 			nseason = uint(nseasond)
